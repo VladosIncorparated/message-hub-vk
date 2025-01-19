@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     MH_BASE_URL: str
     MH_PLATFORM_REGISTRATION_URL: str
     MH_PLATFORM_USER_REGISTRATION_URL: str
+    MH_SEND_MESSAGE_URL: str
 
     THIS_MH_BASE_URL: str
 

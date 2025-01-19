@@ -12,6 +12,7 @@ from .logger_conf import init_logger
 from src.mh_main.request import register_platform
 
 from src.vk.response import router as vk_router
+from src.mh_main.response import router as mh_router
 
 try:
     if not os.path.exists(settings.DATA_PATH):
@@ -40,6 +41,7 @@ logger = init_logger()
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     app.include_router(vk_router)
+    app.include_router(mh_router)
     # app.include_router(webhooks_router, tags=["webhook"])
 
     try:

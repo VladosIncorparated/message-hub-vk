@@ -12,11 +12,15 @@ import os
 
 from sqlalchemy import select, insert
 
-from src.mh_main.request import register_user
+from src.mh_main.request import register_user, send_a_message_to_chat, Message
 from src.vk.request import get_user_info
 
 import uuid
 from httpx import AsyncClient
+
+from urllib.parse import urlparse
+
+import datetime
 
 router = APIRouter()
 
@@ -65,75 +69,103 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                 vk_id = vk_user_id
             ))
 
+            await db_session.commit()
+
             user = (await db_session.execute(select(User).where(User.vk_id==vk_user_id))).scalar_one_or_none()
         else:
             raise HTTPException(500)
 
     if user:
-        attachments = {
-            "images": [],
-            "videos": [],
-            "files": [],
-        }
+        try:
+            temp_dir = f"{settings.TEMP_DIR_PATH}/{str(uuid.uuid4())}"
+            os.mkdir(temp_dir, mode=777)
 
-        if "attachments" in message:
-            for item in message["attachments"]:
-                match(item["type"]):
-                    case "photo":
-                        url = item["photo"]["orig_photo"]["url"]
-        pass
+            attachments = {
+                "images": [],
+                "videos": [],
+                "files": [],
+            }
+
+            if "attachments" in message:
+                for item in message["attachments"]:
+                    match(item["type"]):
+                        case "photo":
+                            url = item["photo"]["orig_photo"]["url"]
+                            url_path = urlparse(url).path
+                            file_extension = os.path.splitext(url_path)[1]
+                            attachments["images"].append(await prepare_file(temp_dir, url, file_extension))
+                        case "video":
+                            # url = None
+                            # async with AsyncClient() as client:
+                            #     response = await client.get(
+                            #         settings.VK_API_BASE_URL+"/video.get",
+                            #         params={
+                            #             "videos": f"{item["video"]["owner_id"]}_{item["video"]["id"]}_{item["video"]["access_key"]}",
+                            #             # "access_token": settings.VK_API_KEY,
+                            #             # "v": settings.VK_API_VERSION,
+                            #         },
+                            #     )
+                            #     url = response
+
+                            # print(url)
+                            pass
+                        case "doc":
+                            name = item["doc"]["title"]
+                            file_extension = "."+item["doc"]["ext"]
+                            url = item["doc"]["url"]
+
+                            attachments["files"].append(await prepare_file(temp_dir, url, file_extension, name=name))
+            
+            await send_a_message_to_chat(
+                settings.MH_BASE_URL+settings.MH_SEND_MESSAGE_URL,
+                Message(
+                    id = -1,
+                    chat_id=user.chat_id,
+                    sender_id=user.id,
+                    text=message["text"],
+                    sended_at=datetime.datetime.fromtimestamp(message["date"]).isoformat(),
+                    attachments=attachments
+                )
+            )
+
+            return Response(content="ok", media_type="text/plain")
+        finally:
+            shutil.rmtree(temp_dir)
 
     
 
-async def prepare_file(temp_dir: str, bot_file_id, file_pref: str = None, file_name: str = None, video: bool = None) -> dict:
-    file = await bot.get_file(bot_file_id)
-    
+async def prepare_file(temp_dir: str, url_f: str, ext: str, name: str | None = None, url_prew: str | None = None, url_prew_ext: str | None = None) -> dict:
     s3_id = uuid.uuid4()
+    temp_name = (name if name else str(s3_id))+ext
 
-    local_file_path = temp_dir+"/"+str(s3_id)+(file_pref if file_pref else "."+file_name.split(".")[-1])
+    file_url = None
 
-    await bot.download_file(file.file_path, local_file_path)
+    async with AsyncClient() as client:
+        response = await client.get(url_f, follow_redirects=True)
+        response = await client.put(url=settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+str(s3_id)+ext,data=response.content)
+        response.raise_for_status()
+        file_url = settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+str(s3_id)+ext
 
-    url = None
+    if url_prew:
+        prew_temp_name = str(uuid.uuid4())+url_prew_ext
+        async with AsyncClient() as client:
+            response = await client.get(url_prew)
+            response = await client.put(url=settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+prew_temp_name,data=response.content)
+            response.raise_for_status()
+            prew_file_url = settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+prew_temp_name
 
-    with open(local_file_path, "rb") as f:
-        async with aiohttp.ClientSession() as session:
-            async with session.put(url=S3_BUCKET_URL+"/"+str(s3_id)+(file_pref if file_pref else "."+file_name.split(".")[-1]),data=f) as response:
-                url = S3_BUCKET_URL+"/"+str(s3_id)+(file_pref if file_pref else "."+file_name.split(".")[-1])
-                response.raise_for_status()
-
-
-    if video:
         return {
-            "url": url,
-            "name": str(s3_id)+file_pref if file_pref else file_name,
+            "url": file_url,
+            "name":temp_name,
             "miniature":{
-                "url": await generete_prevue(temp_dir, local_file_path)
+                "url": prew_file_url,
             }
         }      
     else:
         return {
-            "url": url,
-            "name": str(s3_id)+file_pref if file_pref else file_name
+            "url": file_url,
+            "name": temp_name
         }
-
-async def generete_prevue(temp_dir: str,video_name: str):
-    clip = VideoFileClip(video_name)
-    frame = clip.get_frame(2)
-    image = Image.fromarray(frame)
-    
-    output_filename = str(uuid.uuid4())+".jpg"
-
-    image.save(temp_dir+'/'+output_filename)
-
-    clip.close()
-    image.close()
-
-    with open(temp_dir+'/'+output_filename, "rb") as f:
-        async with aiohttp.ClientSession() as session:
-            async with session.put(url=S3_BUCKET_URL+"/"+output_filename,data=f) as response:
-                response.raise_for_status()
-                return S3_BUCKET_URL+"/"+output_filename
 
 
 call_back_types = {

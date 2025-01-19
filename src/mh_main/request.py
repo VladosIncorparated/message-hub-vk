@@ -9,6 +9,9 @@ from fastapi import APIRouter,HTTPException
 
 from src.settings import settings
 
+from .schemes import Message
+import uuid
+
 logger = logging.getLogger(__name__)
 
 async def register_platform(mh_url: str, callbak_url: str):
@@ -53,3 +56,30 @@ async def register_user(mh_url, name: str, icon_url: str | None, platform_name: 
             raise e
         except Exception as e:
             raise HTTPException(status_code=500, detail="Ошибка регистрации пользователя на основном сервере")
+
+
+async def send_a_message_to_chat(mh_url: str, message: Message):
+    """
+    Отправляет сообщение на главный сервер
+
+    :param message: Message
+    :return: None
+    """
+    async with AsyncClient() as client:
+        try:
+            response = await client.post(
+                url=mh_url,
+                json={
+                    "message": message.model_dump(),
+                    "event_id":str(uuid.uuid4()),
+                },
+                timeout=3000
+            )
+            response.raise_for_status()
+            return response.json()
+        except HTTPStatusError as e:
+            print(f"http Error: {e}")
+            raise e
+        except Exception as e:
+            print(f"Error: {e}")
+            raise e
