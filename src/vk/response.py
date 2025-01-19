@@ -132,7 +132,6 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
         finally:
             shutil.rmtree(temp_dir)
 
-    
 
 async def prepare_file(temp_dir: str, url_f: str, ext: str, name: str | None = None, url_prew: str | None = None, url_prew_ext: str | None = None) -> dict:
     s3_id = uuid.uuid4()

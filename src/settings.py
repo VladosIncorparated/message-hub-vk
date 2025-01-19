@@ -27,6 +27,7 @@ class Settings(BaseSettings):
     VK_CALLBACK_KEY: str
     VK_SECRET: str
     VK_API_VERSION: str
+    VK_API_COMMUNITY_ID: str
     VK_API_BASE_URL: str
 
     S3_BUCKET_URL: str

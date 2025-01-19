@@ -6,6 +6,10 @@ from src.database.database_engine import get_session,AsyncSession
 from src.database.database_schemes import User
 from sqlalchemy import select
 
+from src.vk.request import phots_get_messages_upload_server, upload_photo, save_messages_photo, message_send
+
+import httpx
+
 import uuid
 import os
 import shutil
@@ -29,85 +33,66 @@ async def send_message(event: Event, db_session: AsyncSession ):
         media_video = []
         media_files = []
 
+        attachments = []
+
         if (message.attachments):
             if (message.attachments["images"] and len(message.attachments["images"]) >0):
-                for image in messageModel.attachments["images"]:
+                upload_url = (await phots_get_messages_upload_server())["upload_url"]
+
+                for image in message.attachments["images"]:
                     file_path = temp_dir+"/"+str(uuid.uuid4())+"."+image["name"].split(".")[-1]
+
                     await download_file(image["url"], file_path)
-                    media_images.append(types.InputMediaPhoto(media=types.FSInputFile(path=file_path,filename=image["name"])))
 
-            if (messageModel.attachments["videos"] and len(messageModel.attachments["videos"]) >0):
-                for video in messageModel.attachments["videos"]:
-                    file_path = temp_dir+"/"+str(uuid.uuid4())+"."+video["name"].split(".")[-1]
-                    await download_file(video["url"], file_path)
-                    media_video.append(types.InputMediaVideo(media=types.FSInputFile(path=file_path, filename=video["name"])))
+                    upload_photo_info = await upload_photo(upload_url, file_path)
 
-            if (messageModel.attachments["files"] and len(messageModel.attachments["files"]) >0):
-                for file in messageModel.attachments["files"]:
-                    file_path = temp_dir+"/"+str(uuid.uuid4())+"."+file["name"].split(".")[-1]
-                    await download_file(file["url"], file_path)
-                    media_files.append(types.InputMediaDocument(media=types.FSInputFile(path=file_path, filename=file["name"])))
+                    save_photo_info = (await save_messages_photo(upload_photo_info["server"], upload_photo_info["photo"], upload_photo_info["hash"]))[0]
+
+                    attachments.append(f"photo{str(save_photo_info["owner_id"])}_{str(save_photo_info["id"])}")
+
+            # if (messageModel.attachments["videos"] and len(messageModel.attachments["videos"]) >0):
+            #     for video in messageModel.attachments["videos"]:
+            #         file_path = temp_dir+"/"+str(uuid.uuid4())+"."+video["name"].split(".")[-1]
+            #         await download_file(video["url"], file_path)
+            #         media_video.append(types.InputMediaVideo(media=types.FSInputFile(path=file_path, filename=video["name"])))
+
+            # if (messageModel.attachments["files"] and len(messageModel.attachments["files"]) >0):
+            #     for file in messageModel.attachments["files"]:
+            #         file_path = temp_dir+"/"+str(uuid.uuid4())+"."+file["name"].split(".")[-1]
+            #         await download_file(file["url"], file_path)
+            #         media_files.append(types.InputMediaDocument(media=types.FSInputFile(path=file_path, filename=file["name"])))
+        
+        chunced_attachments = [",".join(attachments[i:i + 10]) for i in range(0, len(attachments), 10)]
 
         for user in users:
             try:
-                if media_images:
-                    await bot.send_media_group(chat_id=user.telegram_id, media=media_images)
+                for chunc in chunced_attachments:
+                    await message_send(user.vk_id, None, chunc)
 
-                if media_video:
-                    await bot.send_media_group(chat_id=user.telegram_id, media=media_video)
-                
-                if media_files:
-                    await bot.send_media_group(chat_id=user.telegram_id, media=media_files)
+                await message_send(user.vk_id, message.text, None)
 
-                if (messageModel.text):
-                    await bot.send_message(chat_id=user.telegram_id, text=messageModel.text)
             except Exception as e:
                 logger.exception(
-                    f"Не удалось отправить сообщение пользователю {user.telegram_id}: {e}",
+                    f"Не удалось отправить сообщение пользователю {user.vk_id}: {e}",
                     exc_info=False,
                 )
-
-    except FailDownload as e:
-        logger.exception(
-            f"Не удалось скачать файл {e.url}.",
-            exc_info=False,
-        )
     except Exception as e:
         logger.exception(
             f"Непредвиденная ошибка: {e}",
             exc_info=False,
         )
-        raise web.HTTPInternalServerError()
+        raise HTTPException(500)
     finally:
         shutil.rmtree(temp_dir)
 
-    return web.Response()
-
-
-class FailDownload(Exception):
-    url: str
-
-    def __init__(self, *args, url: str):
-        super().__init__(*args)
-        self.url = url
 
 async def download_file(url, save_path):
-    async with aiohttp.ClientSession() as session:
-        async with session.get(url) as response:
-            if response.status == 200:
-                with open(save_path, 'wb') as f:
-                    while True:
-                        chunk = await response.content.read(1024)  # Чтение файла по 1024 байта
-                        if not chunk:
-                            break
-                        f.write(chunk)
-                print(f"Файл успешно сохранен: {save_path}")
-            else:
-                logger.exception(
-                    f"Не удалось скачать файл. Статус: {response.status}",
-                    exc_info=False,
-                )
-                raise FailDownload(url)
+    async with httpx.AsyncClient() as client:
+        response = await client.get(url)
+        response.raise_for_status()
+
+        with open(save_path, 'wb') as f:
+            f.write(response.content)
 
 
 event_handlers = {
