@@ -212,3 +212,83 @@ async def message_send(user_id: str, text: str | None, attachment: str | None):
         return response.json()
         
 
+async def docs_get_messages_upload_server(peer_id)->dict:
+    """
+    return: {
+        "upload_url":"https:\/\/pu.vk.com\/c240331\/upload_doc.php?act=add_doc&mid=743784474&aid=0&gid=0&type=0&hash=ae6f11219f2e21f9ad7825b1739141b3&rhash=69c202cbb175d33099a56d8aaf42f369&api=1"
+    }
+    """
+    async with AsyncClient() as client:
+        response = await client.get(
+            settings.VK_API_BASE_URL+"/docs.getMessagesUploadServer",
+            params={
+                "peer_id": peer_id,
+                "access_token": settings.VK_API_KEY,
+                "v": settings.VK_API_VERSION,
+            },
+        )
+    
+    response.raise_for_status()
+    response_data = response.json()
+    
+    # Проверяем, есть ли в ответе данные
+    if "response" in response_data:
+        url_info = response_data["response"]
+        return url_info
+    else:
+        raise Exception("docs_get_messages_upload_server not data")
+
+
+
+async def upload_doc(url: str, file_name, file_path: str)->dict:
+    """
+    return: {
+        "file":"743784474|0|0|240331|e24cd4aa3c|pdf|14854|\u041f\u0435\u0440\u0432\u044b\u0435 \u0448\u0430\u0433\u0438.pdf|00a3fc6e249ee1196593627b888e2187|8775d2ed941fb21e014f14ede3d61a9c||||eyJkaXNrIjozfQ=="
+    }
+    """
+    with open(file_path, 'rb') as doc_file:
+        files = {"file": (file_name, doc_file)}
+        async with AsyncClient() as client:
+            response = await client.post(
+                url,
+                files=files,
+            )
+    
+            response.raise_for_status()
+            response_data = response.json()
+            
+            return response_data
+
+
+async def save_docs(file: dict)->dict:
+    """
+    return:{
+        "type":"doc",
+        "doc":{
+        "id":657626222,
+        "owner_id":743784474,
+        "title":"\\u041f\\u0435\\u0440\\u0432\\u044b\\u0435 \\u0448\\u0430\\u0433\\u0438.pdf",
+        "size":14854,
+        "ext":"pdf",
+        "date":1674050872,"type":1,
+        "url":"https:\/\/vk.com\/doc743784474_657626222?hash=jWHXvoUCYCxklaOiBsI0bZRACXzH6CiauvHlkgrIjYg&dl=G42DGNZYGQ2DONA:1674050872:7rxkHS8nSaTa5C0DkRfjpZZagKIs1Z3lKnPABTOqr4P&api=1&no_preview=1"
+        }
+    }
+    """
+    async with AsyncClient() as client:
+        response = await client.post(
+            settings.VK_API_BASE_URL+"/docs.save",
+            data={
+                "file": file,
+                "access_token": settings.VK_API_KEY,
+                "v": settings.VK_API_VERSION,
+            },
+        )
+
+        response.raise_for_status()
+        response_data = response.json()
+        
+        if "response" in response_data:
+            return response_data["response"]
+        else:
+            raise Exception("phots_get_messages_upload_server not data")

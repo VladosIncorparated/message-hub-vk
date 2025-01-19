@@ -6,7 +6,7 @@ from src.database.database_engine import get_session,AsyncSession
 from src.database.database_schemes import User
 from sqlalchemy import select
 
-from src.vk.request import phots_get_messages_upload_server, upload_photo, save_messages_photo, message_send
+from src.vk.request import phots_get_messages_upload_server, upload_photo, save_messages_photo, message_send, docs_get_messages_upload_server, upload_doc, save_docs
 
 import httpx
 
@@ -56,15 +56,26 @@ async def send_message(event: Event, db_session: AsyncSession ):
             #         await download_file(video["url"], file_path)
             #         media_video.append(types.InputMediaVideo(media=types.FSInputFile(path=file_path, filename=video["name"])))
 
-            # if (messageModel.attachments["files"] and len(messageModel.attachments["files"]) >0):
-            #     for file in messageModel.attachments["files"]:
-            #         file_path = temp_dir+"/"+str(uuid.uuid4())+"."+file["name"].split(".")[-1]
-            #         await download_file(file["url"], file_path)
-            #         media_files.append(types.InputMediaDocument(media=types.FSInputFile(path=file_path, filename=file["name"])))
-        
-        chunced_attachments = [",".join(attachments[i:i + 10]) for i in range(0, len(attachments), 10)]
 
         for user in users:
+            file_attachments = []
+
+            if (message.attachments["files"] and len(message.attachments["files"]) >0):
+                upload_url = (await docs_get_messages_upload_server(user.vk_id))["upload_url"] # Для конкретного пользователя, мож как-то подругому, но для сообщества не работает
+
+                for file in message.attachments["files"]:
+                    file_path = temp_dir+"/"+str(uuid.uuid4())+"."+file["name"].split(".")[-1]
+                    await download_file(file["url"], file_path)
+
+                    upload_doc_info = await upload_doc(upload_url, file["name"], file_path)
+
+                    save_doc_info = await save_docs(upload_doc_info["file"])
+
+                    file_attachments.append(f"doc{str(save_doc_info["doc"]["owner_id"])}_{str(save_doc_info["doc"]["id"])}")
+
+            sum_attachments = attachments+file_attachments
+            chunced_attachments = [",".join(sum_attachments[i:i + 10]) for i in range(0, len(sum_attachments), 10)]
+
             try:
                 for chunc in chunced_attachments:
                     await message_send(user.vk_id, None, chunc)
