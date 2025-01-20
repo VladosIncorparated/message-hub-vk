@@ -21,6 +21,12 @@ from httpx import AsyncClient
 from urllib.parse import urlparse
 
 import datetime
+import mimetypes
+
+from moviepy import VideoFileClip
+from PIL import Image
+
+from src.vk.request import message_send
 
 router = APIRouter()
 
@@ -86,6 +92,8 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                 "files": [],
             }
 
+            find_video = False
+
             if "attachments" in message:
                 for item in message["attachments"]:
                     match(item["type"]):
@@ -108,12 +116,17 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                             #     url = response
 
                             # print(url)
+                            find_video = True
                             pass
                         case "doc":
                             name = item["doc"]["title"]
                             file_extension = "."+item["doc"]["ext"]
                             url = item["doc"]["url"]
 
+                            # mime_type, encoding = mimetypes.guess_type(name+file_extension)
+                            # if mime_type[:5] == "video":
+                            #     attachments["videos"].append(await prepare_file(temp_dir, url, file_extension, name=name, genarate_prew=True))
+                            # else:
                             attachments["files"].append(await prepare_file(temp_dir, url, file_extension, name=name))
             
             await send_a_message_to_chat(
@@ -128,12 +141,15 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                 )
             )
 
+            if find_video:
+                await message_send(user.vk_id, "К сожелению vk api не предостовляет возможности скачивания видео для сообществ. Чтобы отправить видео загрузите его без сжатия.", None, reply_to=message["id"])
+
             return Response(content="ok", media_type="text/plain")
         finally:
             shutil.rmtree(temp_dir)
 
 
-async def prepare_file(temp_dir: str, url_f: str, ext: str, name: str | None = None, url_prew: str | None = None, url_prew_ext: str | None = None) -> dict:
+async def prepare_file(temp_dir: str, url_f: str, ext: str, name: str | None = None, genarate_prew: bool = False) -> dict:
     s3_id = uuid.uuid4()
     temp_name = (name if name else str(s3_id))+ext
 
@@ -141,23 +157,17 @@ async def prepare_file(temp_dir: str, url_f: str, ext: str, name: str | None = N
 
     async with AsyncClient() as client:
         response = await client.get(url_f, follow_redirects=True)
+        print(response.content)
         response = await client.put(url=settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+str(s3_id)+ext,data=response.content)
         response.raise_for_status()
         file_url = settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+str(s3_id)+ext
 
-    if url_prew:
-        prew_temp_name = str(uuid.uuid4())+url_prew_ext
-        async with AsyncClient() as client:
-            response = await client.get(url_prew)
-            response = await client.put(url=settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+prew_temp_name,data=response.content)
-            response.raise_for_status()
-            prew_file_url = settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+prew_temp_name
-
+    if genarate_prew:
         return {
             "url": file_url,
             "name":temp_name,
             "miniature":{
-                "url": prew_file_url,
+                # "url": await generete_prevue(temp_dir, ur),
             }
         }      
     else:
@@ -171,6 +181,24 @@ call_back_types = {
     "confirmation": ansver_confirmation,
     "message_new": ansver_message_new,
 }
+
+# async def generete_prevue(temp_dir: str,video_path: str):
+#     clip = VideoFileClip(video_path)
+#     frame = clip.get_frame(2)
+#     image = Image.fromarray(frame)
+    
+#     output_filename = str(uuid.uuid4())+".jpg"
+
+#     image.save(temp_dir+'/'+output_filename)
+
+#     clip.close()
+#     image.close()
+
+#     with open(temp_dir+'/'+output_filename, "rb") as f:
+#         async with aiohttp.ClientSession() as session:
+#             async with session.put(url=S3_BUCKET_URL+"/"+output_filename,data=f) as response:
+#                 response.raise_for_status()
+#                 return S3_BUCKET_URL+"/"+output_filename
 
 @router.post("/vk")
 async def call(body: dict = Body(), db_session: AsyncSession = Depends(get_session)):

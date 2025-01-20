@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 async def send_message(event: Event, db_session: AsyncSession ):
     message = Message.model_validate(event.data["message"], from_attributes=True)
     
-    users = (await db_session.execute(select(User).where(User.chat_id==message.chat_id))).scalars()
+    users = (await db_session.execute(select(User).where(User.chat_id==message.chat_id, User.id!=message.sender_id))).scalars()
 
     if not users:
         raise HTTPException(404)
@@ -64,6 +64,20 @@ async def send_message(event: Event, db_session: AsyncSession ):
                 upload_url = (await docs_get_messages_upload_server(user.vk_id))["upload_url"] # Для конкретного пользователя, мож как-то подругому, но для сообщества не работает
 
                 for file in message.attachments["files"]:
+                    file_path = temp_dir+"/"+str(uuid.uuid4())+"."+file["name"].split(".")[-1]
+                    await download_file(file["url"], file_path)
+
+                    upload_doc_info = await upload_doc(upload_url, file["name"], file_path)
+
+                    save_doc_info = await save_docs(upload_doc_info["file"])
+
+                    file_attachments.append(f"doc{str(save_doc_info["doc"]["owner_id"])}_{str(save_doc_info["doc"]["id"])}")
+
+
+            if (message.attachments["videos"] and len(message.attachments["videos"]) >0):
+                upload_url = (await docs_get_messages_upload_server(user.vk_id))["upload_url"] # Для конкретного пользователя, мож как-то подругому, но для сообщества не работает
+
+                for file in message.attachments["videos"]:
                     file_path = temp_dir+"/"+str(uuid.uuid4())+"."+file["name"].split(".")[-1]
                     await download_file(file["url"], file_path)
 

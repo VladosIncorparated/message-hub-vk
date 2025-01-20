@@ -186,7 +186,7 @@ async def save_messages_photo(server: str, photo: dict, hash: str)->dict:
             raise Exception("phots_get_messages_upload_server not data")
         
 
-async def message_send(user_id: str, text: str | None, attachment: str | None):
+async def message_send(user_id: str, text: str | None, attachment: str | None, reply_to: str | None = None):
     """
     Отправка сообщения
 
@@ -202,7 +202,8 @@ async def message_send(user_id: str, text: str | None, attachment: str | None):
             data["message"]=text
         if attachment:
             data["attachment"] = attachment
-
+        if reply_to:
+            data["reply_to"]=reply_to
         response = await client.post(
             settings.VK_API_BASE_URL+"/messages.send",
             data=data,
