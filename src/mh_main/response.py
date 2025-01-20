@@ -29,9 +29,6 @@ async def send_message(event: Event, db_session: AsyncSession ):
     try:
         temp_dir = f"./temp/{str(uuid.uuid4())}"
         os.mkdir(temp_dir, mode=777)
-        media_images = []
-        media_video = []
-        media_files = []
 
         attachments = []
 

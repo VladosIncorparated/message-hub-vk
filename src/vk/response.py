@@ -129,17 +129,18 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                             # else:
                             attachments["files"].append(await prepare_file(temp_dir, url, file_extension, name=name))
             
-            await send_a_message_to_chat(
-                settings.MH_BASE_URL+settings.MH_SEND_MESSAGE_URL,
-                Message(
-                    id = -1,
-                    chat_id=user.chat_id,
-                    sender_id=user.id,
-                    text=message["text"],
-                    sended_at=datetime.datetime.fromtimestamp(message["date"]).isoformat(),
-                    attachments=attachments
+            if message["text"] or attachments["images"] or attachments["videos"] or attachments["files"]:
+                await send_a_message_to_chat(
+                    settings.MH_BASE_URL+settings.MH_SEND_MESSAGE_URL,
+                    Message(
+                        id = -1,
+                        chat_id=user.chat_id,
+                        sender_id=user.id,
+                        text=message["text"],
+                        sended_at=datetime.datetime.fromtimestamp(message["date"]).isoformat(),
+                        attachments=attachments
+                    )
                 )
-            )
 
             if find_video:
                 await message_send(user.vk_id, "К сожелению vk api не предостовляет возможности скачивания видео для сообществ. Чтобы отправить видео загрузите его без сжатия.", None, reply_to=message["id"])
