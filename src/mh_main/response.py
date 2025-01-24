@@ -126,9 +126,10 @@ event_handlers = {
 
 @router.post("/webhook/event")
 async def event(event: Event, db_session: AsyncSession = Depends(get_session)):
-    arr = event_handlers[event.name]
-    if arr:
-        for item in arr:
-            await item(event, db_session)
+    if event.name in event_handlers:
+        arr = event_handlers[event.name]
+        if arr:
+            for item in arr:
+                await item(event, db_session)
     else:
         logger.info(f"Ненайден обработчик для события {event.name}.\n", exc_info=False)
