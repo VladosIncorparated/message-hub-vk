@@ -123,11 +123,18 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                             file_extension = "."+item["doc"]["ext"]
                             url = item["doc"]["url"]
 
-                            # mime_type, encoding = mimetypes.guess_type(name+file_extension)
-                            # if mime_type[:5] == "video":
-                            #     attachments["videos"].append(await prepare_file(temp_dir, url, file_extension, name=name, genarate_prew=True))
-                            # else:
-                            attachments["files"].append(await prepare_file(temp_dir, url, file_extension, name=name))
+                            mime_type, encoding = mimetypes.guess_type(name+file_extension)
+                            if mime_type[:5] == "video":
+                                # attachments["videos"].append(await prepare_file(temp_dir, url, file_extension, name=name, genarate_prew=True))
+                                # attachments["files"].append(
+                                #     {
+                                #         "url": url,
+                                #         "name": name+file_extension
+                                #     }
+                                # )
+                                find_video = True
+                            else:
+                                attachments["files"].append(await prepare_file(temp_dir, url, file_extension, name=name))
             
             if message["text"] or attachments["images"] or attachments["videos"] or attachments["files"]:
                 await send_a_message_to_chat(
@@ -143,7 +150,7 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                 )
 
             if find_video:
-                await message_send(user.vk_id, "К сожелению vk api не предостовляет возможности скачивания видео для сообществ. Чтобы отправить видео загрузите его без сжатия.", None, reply_to=message["id"])
+                await message_send(user.vk_id, "К сожелению vk api не предостовляет возможности скачивания видео для сообществ.", None, reply_to=message["id"])
 
             return Response(content="ok", media_type="text/plain")
         finally:
@@ -158,7 +165,7 @@ async def prepare_file(temp_dir: str, url_f: str, ext: str, name: str | None = N
 
     async with AsyncClient() as client:
         response = await client.get(url_f, follow_redirects=True)
-        print(response.content)
+        # print(response.content)
         response = await client.put(url=settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+str(s3_id)+ext,data=response.content)
         response.raise_for_status()
         file_url = settings.S3_BUCKET_URL+"/"+settings.S3_BUCKET_NAME+"/"+str(s3_id)+ext
