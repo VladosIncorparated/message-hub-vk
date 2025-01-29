@@ -1,0 +1,30 @@
+services:
+  mh_vk:
+    build: .
+    container_name: mh_vk
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - sqlite_db:/app/data
+    ports:
+      - "8003:8003"
+    # extra_hosts:
+    #   - "host.docker.internal:host-gateway"
+    labels:
+      - traefik.enable=true
+      - traefik.http.middlewares.mh_vk_https.redirectscheme.scheme=https
+      - traefik.http.routers.mh_vk.entrypoints=web
+      - traefik.http.routers.mh_vk.middlewares=mh_vk_https@docker
+      - traefik.http.routers.mh_vk.rule=Host(`mh-vk.server_name.youdomain`)
+      - traefik.http.routers.mh_vk_https.entrypoints=websecure
+      - traefik.http.routers.mh_vk_https.rule=Host(`mh-vk.server_name.youdomain`)
+      - traefik.http.routers.mh_vk_https.tls=true
+      - traefik.http.routers.mh_vk_https.tls.certresolver=le
+      - traefik.http.services.mh_vk.loadbalancer.server.port=8003
+volumes:
+  sqlite_db:
+networks:
+  default:
+    external:
+      name: traefik_default
