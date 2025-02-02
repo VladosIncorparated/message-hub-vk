@@ -40,4 +40,7 @@ async def lifespan(app: FastAPI):
     yield
     logger.debug("Приложение успешно остановлено")
 
-app = FastAPI(lifespan=lifespan)
+if settings.API_KEY:
+    app = FastAPI(lifespan=lifespan, docs_url=None, redoc_url=None)
+else:
+    app = FastAPI(lifespan=lifespan)
