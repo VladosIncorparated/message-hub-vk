@@ -14,6 +14,8 @@ import uuid
 import os
 import shutil
 
+from src.auth import verify_api_key
+
 router = APIRouter(prefix="/mh")
 
 logger = logging.getLogger(__name__)
@@ -125,7 +127,7 @@ event_handlers = {
 
 
 @router.post("/webhook/event")
-async def event(event: Event, db_session: AsyncSession = Depends(get_session)):
+async def event(event: Event, db_session: AsyncSession = Depends(get_session), api_key = Depends(verify_api_key)):
     if event.name in event_handlers:
         arr = event_handlers[event.name]
         if arr:

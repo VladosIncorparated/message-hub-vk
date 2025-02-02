@@ -35,6 +35,9 @@ class Settings(BaseSettings):
     S3_SECRET_ACCESS_KEY: str
     S3_BUCKET_NAME: str
 
+    API_KEY: str | None
+    OUT_API_KEY: str | None
+
     @property
     def FULL_DB_URL(self) -> str:
         return f"{self.DB_TYPE}+{self.DB_DRIVER}:///{self.DATA_PATH}/{self.DB_NAME}"

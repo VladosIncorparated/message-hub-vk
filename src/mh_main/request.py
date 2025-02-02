@@ -28,7 +28,8 @@ async def register_platform(mh_url: str, callbak_url: str):
                                          json={
                                              "platform_name": settings.MH_PLATFORM_NAME,
                                              "url": callbak_url
-                                         })
+                                         },
+                                         headers={"API-KEY":settings.OUT_API_KEY})
             logger.info(response.text)
         except httpx.ReadTimeout:
             raise Exception("Главный сервер не в сети. Время ожидания ответа превышено")
@@ -48,7 +49,8 @@ async def register_user(mh_url, name: str, icon_url: str | None, platform_name: 
                                              "platform_name": platform_name, 
                                              "name": name,
                                              "icon_url": icon_url,
-                                             })
+                                             },
+                                        headers={"API-KEY":settings.OUT_API_KEY})
             response.raise_for_status()
             return response.json()
         except HTTPException as e:
@@ -73,6 +75,7 @@ async def send_a_message_to_chat(mh_url: str, message: Message):
                     "message": message.model_dump(),
                     "event_id":str(uuid.uuid4()),
                 },
+                headers={"API-KEY":settings.OUT_API_KEY},
                 timeout=3000
             )
             response.raise_for_status()
