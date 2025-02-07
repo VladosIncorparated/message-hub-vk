@@ -4,7 +4,7 @@ from src.settings import settings
 from src.settings import settings
 
 from src.database.database_engine import get_session, AsyncSession
-from src.database.database_schemes import User
+from src.database.database_schemes import User, MessageTranslate
 
 import json
 import shutil
@@ -137,7 +137,7 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                                 attachments["files"].append(await prepare_file(temp_dir, url, file_extension, name=name))
             
             if message["text"] or attachments["images"] or attachments["videos"] or attachments["files"]:
-                await send_a_message_to_chat(
+                res = await send_a_message_to_chat(
                     settings.MH_BASE_URL+settings.MH_SEND_MESSAGE_URL,
                     Message(
                         id = -1,
@@ -148,6 +148,13 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                         attachments=attachments
                     )
                 )
+                await db_session.execute(insert(MessageTranslate).values(
+                    mh_message_id=int(res["message_id"]),
+                    vk_chat_id=message["from_id"],
+                    vk_message_id=message["id"]
+                ))
+
+                await db_session.commit()
 
             if find_video:
                 await message_send(user.vk_id, "К сожелению vk api не предостовляет возможности скачивания видео для сообществ.", None, reply_to=message["id"])

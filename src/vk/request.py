@@ -293,3 +293,24 @@ async def save_docs(file: dict)->dict:
             return response_data["response"]
         else:
             raise Exception("phots_get_messages_upload_server not data")
+
+
+async def message_delete(peer_id: int, message_id: int):
+    """
+    Удаление сообщения
+    """
+    async with AsyncClient() as client:
+        data={
+            "peer_id":peer_id,
+            "message_ids": str(message_id),
+            "access_token": settings.VK_API_KEY,
+            "v": settings.VK_API_VERSION,
+            "delete_for_all":1,
+        }
+        response = await client.post(
+            settings.VK_API_BASE_URL+"/messages.delete",
+            data=data,
+        )
+
+        response.raise_for_status()
+        return response.json()

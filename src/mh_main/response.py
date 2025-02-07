@@ -3,10 +3,10 @@ from .schemes import Event, Message
 import logging
 
 from src.database.database_engine import get_session,AsyncSession
-from src.database.database_schemes import User
-from sqlalchemy import select
+from src.database.database_schemes import User, MessageTranslate
+from sqlalchemy import select, insert
 
-from src.vk.request import phots_get_messages_upload_server, upload_photo, save_messages_photo, message_send, docs_get_messages_upload_server, upload_doc, save_docs
+from src.vk.request import phots_get_messages_upload_server, upload_photo, save_messages_photo, message_send, docs_get_messages_upload_server, upload_doc, save_docs, message_delete
 
 import httpx
 
@@ -91,15 +91,29 @@ async def send_message(event: Event, db_session: AsyncSession ):
 
             try:
                 for chunc in chunced_attachments:
-                    await message_send(user.vk_id, None, chunc)
+                    res = await message_send(user.vk_id, None, chunc)
 
-                await message_send(user.vk_id, message.text, None)
+                    await db_session.execute(insert(MessageTranslate).values(
+                        mh_message_id=message.id,
+                        vk_chat_id=user.id,
+                        vk_message_id=res["response"]
+                    ))
+
+                if message.text:
+                    res = await message_send(user.vk_id, message.text, None)
+
+                    await db_session.execute(insert(MessageTranslate).values(
+                        mh_message_id=message.id,
+                        vk_chat_id=user.id,
+                        vk_message_id=res["response"]
+                    ))
 
             except Exception as e:
                 logger.exception(
                     f"Не удалось отправить сообщение пользователю {user.vk_id}: {e}",
                     exc_info=False,
                 )
+        await db_session.commit()
     except Exception as e:
         logger.exception(
             f"Непредвиденная ошибка: {e}",
@@ -119,10 +133,22 @@ async def download_file(url, save_path):
             f.write(response.content)
 
 
+async def delete_message(event: Event, db_session: AsyncSession):
+    message = Message.model_validate(event.data["message"], from_attributes=True)
+
+    translates = (await db_session.execute(select(MessageTranslate).where(MessageTranslate.mh_message_id==message.id))).scalars()
+
+    for translate in translates:
+        res=    await message_delete(translate.vk_chat_id, translate.vk_message_id)
+        print(res)
+
 event_handlers = {
     "chat.new_message": [
         send_message
     ],
+    "chat.delete_message":[
+        delete_message
+    ]
 }
 
 

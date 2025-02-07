@@ -23,3 +23,10 @@ class User(Base):
     name: Mapped[str_256]
     vk_id: Mapped[int]
 
+
+class MessageTranslate(Base):
+    __tablename__ = "message_translate"
+
+    mh_message_id: Mapped[int] =  mapped_column()
+    vk_chat_id: Mapped[int] = mapped_column(primary_key=True)
+    vk_message_id: Mapped[int] = mapped_column(primary_key=True)
