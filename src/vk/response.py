@@ -160,6 +160,10 @@ async def ansver_message_new(body: dict, db_session: AsyncSession):
                 await message_send(user.vk_id, "К сожелению vk api не предостовляет возможности скачивания видео для сообществ.", None, reply_to=message["id"])
 
             return Response(content="ok", media_type="text/plain")
+        except Exception as e:
+            await message_send(user.vk_id, "Приносим извинения! Ваше сообщение не было отправлено. Мы уже решаем данную проблему!", None, reply_to=message["id"])
+            raise e
+
         finally:
             shutil.rmtree(temp_dir)
 
