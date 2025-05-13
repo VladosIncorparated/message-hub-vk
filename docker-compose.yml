@@ -2,6 +2,7 @@ services:
   mh_vk:
     build: .
     container_name: mh_vk
+    restart: always
     env_file:
       - .env
     volumes:
